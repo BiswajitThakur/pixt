@@ -2,6 +2,9 @@
 name = "pixt"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Terminal Based Cross Platform Image Viewer"
+repository = "https://github.com/BiswajitThakur/pixt"
 
 [dependencies]
 crossterm = "0.28.1"
