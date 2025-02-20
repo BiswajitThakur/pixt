@@ -1,10 +1,14 @@
 [package]
 name = "pixt"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 license = "MIT"
 description = "Terminal Based Cross Platform Image Viewer"
 repository = "https://github.com/BiswajitThakur/pixt"
+exclude = [
+    "screenshots/*",
+    ".github/*",
+]
 
 [dependencies]
 clap = { version = "4.5.30", features = ["derive"] }
