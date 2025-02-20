@@ -5,6 +5,10 @@ edition = "2021"
 license = "MIT"
 description = "Terminal Based Cross Platform Image Viewer"
 repository = "https://github.com/BiswajitThakur/pixt"
+exclude = [
+    "screenshots/*",
+    ".github/*",
+]
 
 [dependencies]
 clap = { version = "4.5.30", features = ["derive"] }
