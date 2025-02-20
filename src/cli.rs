@@ -18,7 +18,7 @@ pub struct Cli {
     #[arg(short = 'H', long = "height")]
     height: Option<u32>,
 
-    /// Enable Color
+    /// Enable colored output
     #[arg(short = 'c', long = "colored")]
     colored: bool,
 
@@ -31,8 +31,9 @@ pub struct Cli {
     )]
     style: StyleOps,
 
+    /// Input file paths
     #[arg(num_args = 1..)]
-    args: Vec<PathBuf>,
+    files: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, ValueEnum)]
@@ -48,21 +49,36 @@ enum StyleOps {
 
 impl Cli {
     pub fn run(&self) -> io::Result<()> {
-        let args = if self.style == StyleOps::Custom && self.args.len() < 2 {
+        // Extract image paths if the `--style | -s custom` option is provided in the CLI.
+        // - If the `custom` style is selected but no image path is provided, print an error and exit.
+        // - Otherwise, if `custom` is selected, skip the first argument (which may be the style
+        //   option) and collect the rest as image paths.
+        // - If a different style is selected, use all provided arguments as they are.
+        let args = if self.style == StyleOps::Custom && self.files.len() < 2 {
             eprintln!("ERROR: Image Path Not Found");
             std::process::exit(1);
         } else if self.style == StyleOps::Custom {
-            self.args.iter().skip(1).map(|v| v.clone()).collect()
+            self.files.iter().skip(1).cloned().collect()
         } else {
-            self.args.clone()
+            self.files.clone()
         };
-        let mut stdout = io::stdout().lock();
+        let mut stdout = io::stdout();
+        // Iterate over the provided image paths and process each image.
+        // - Open the image file using `ImageReader`.
+        // - Decode the image; if decoding fails, print the error and exit.
         for path in args {
             let img = ImageReader::open(path)?.decode().unwrap_or_else(|err| {
                 eprintln!("{}", err);
                 std::process::exit(1);
             });
             let filter = FilterType::CatmullRom;
+            // Resize the image based on the provided width and height options:
+            // - If both width and height are specified, resize the image exactly to those dimensions.
+            // - If only width is specified, calculate the height to maintain the aspect ratio.
+            // - If only height is specified, calculate the width to maintain the aspect ratio,
+            //   ensuring it does not exceed the terminal width.
+            // - If neither width nor height is specified, scale the image to fit within the terminal width
+            //   while maintaining the aspect ratio.
             let img = match (self.width, self.height) {
                 (Some(width), Some(height)) => img.resize_exact(width, height, filter),
                 (Some(width), None) => {
@@ -82,12 +98,15 @@ impl Cli {
                     img.resize(w as u32, h, filter)
                 }
             };
+            // Handle image rendering based on style and color mode.
+            // - `StyleOps` determines the image rendering style (e.g., ASCII, block, etc.).
+            // - `bool` (`self.colored`) specifies whether to render in color or grayscale.
             match (&self.style, &self.colored) {
                 (StyleOps::Ascii, true) => {
                     let style = Style::from([' ', '.', '-', '~', '+', '*', '%', '#', '@']);
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, ResetColor, Print("\n")),
                         |stdout, (t, b), ch| {
                             execute!(
@@ -101,8 +120,8 @@ impl Cli {
                 (StyleOps::Ascii, false) => {
                     let style = Style::from([' ', '.', '-', '~', '+', '*', '%', '#', '@']);
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, Print("\n")),
                         |stdout, _, ch| execute!(stdout, Print(ch)),
                     )?;
@@ -110,8 +129,8 @@ impl Cli {
                 (StyleOps::Block, true) => {
                     let style = Style::from([' ', '░', '▒', '▓']);
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, Print("\n")),
                         |stdout, (c1, c2), ch| {
                             execute!(
@@ -125,8 +144,8 @@ impl Cli {
                 (StyleOps::Block, false) => {
                     let style = Style::from([' ', '░', '▒', '▓']);
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, Print("\n")),
                         |stdout, _, ch| execute!(stdout, Print(ch)),
                     )?;
@@ -134,8 +153,8 @@ impl Cli {
                 (StyleOps::Pixel, true) => {
                     let style = Style::from(['▀']);
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, ResetColor, Print("\n")),
                         |stdout, (top, button), ch| {
                             execute!(
@@ -148,7 +167,13 @@ impl Cli {
                     )?;
                 }
                 (StyleOps::Pixel, false) => {
-                    print_img_not_colored(&mut stdout, img, vec![' ', '▀', '▞', '▟', '█'])?;
+                    let style = Style::from([' ', '▀', '▞', '▟', '█']);
+                    style.print(
+                        &mut stdout,
+                        img,
+                        |stdout| execute!(stdout, Print("\n")),
+                        |stdout, _, ch| execute!(stdout, Print(ch)),
+                    )?;
                 }
                 (StyleOps::Braills, true) => {
                     let style = Style::from([
@@ -159,8 +184,8 @@ impl Cli {
                         ['⠶', '⠾', '⠾', '⠿', '⠿'],
                     ]);
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, Print("\n")),
                         |stdout, (c1, c2), ch| {
                             execute!(
@@ -180,8 +205,8 @@ impl Cli {
                         ['⠶', '⠾', '⠾', '⠿', '⠿'],
                     ]);
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, Print("\n")),
                         |stdout, _, ch| execute!(stdout, Print(ch)),
                     )?;
@@ -189,8 +214,8 @@ impl Cli {
                 (StyleOps::Dots, true) => {
                     let style = Style::from([' ', '⠂', '⠒', '⠕', '⠞', '⠟', '⠿']);
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, Print("\n")),
                         |stdout, (c1, c2), ch| {
                             execute!(
@@ -204,14 +229,14 @@ impl Cli {
                 (StyleOps::Dots, false) => {
                     let style = Style::from([' ', '⠂', '⠒', '⠕', '⠞', '⠟', '⠿']);
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, Print("\n")),
                         |stdout, _, ch| execute!(stdout, Print(ch)),
                     )?;
                 }
                 (StyleOps::Custom, false) => {
-                    let input = self.args[0]
+                    let input = self.files[0]
                         .clone()
                         .into_os_string()
                         .into_string()
@@ -221,14 +246,14 @@ impl Cli {
                         });
                     let style = Style::from(input.chars().collect::<Vec<char>>());
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, Print("\n")),
                         |stdout, _, ch| execute!(stdout, Print(ch)),
                     )?;
                 }
                 (StyleOps::Custom, true) => {
-                    let input = self.args[0]
+                    let input = self.files[0]
                         .clone()
                         .into_os_string()
                         .into_string()
@@ -238,8 +263,8 @@ impl Cli {
                         });
                     let style = Style::from(input.chars().collect::<Vec<char>>());
                     style.print(
-                        img,
                         &mut stdout,
+                        img,
                         |stdout| execute!(stdout, Print("\n")),
                         |stdout, (c1, c2), ch| {
                             execute!(
@@ -256,33 +281,16 @@ impl Cli {
     }
 }
 
+/// Convert an `Rgb<u8>` value to a `Color::Rgb` type for terminal rendering.
 #[inline(always)]
 fn rgb_to_true_color(Rgb([r, g, b]): Rgb<u8>) -> Color {
     Color::Rgb { r, g, b }
 }
 
-fn print_img_not_colored<W: io::Write>(
-    stdout: &mut W,
-    img: DynamicImage,
-    chars: Vec<char>,
-) -> io::Result<()> {
-    let len = chars.len();
-    let s = u8::MAX / len as u8;
-    for y in (0..img.height() - 1).step_by(2) {
-        for x in 0..img.width() {
-            let t = img.get_pixel(x, y).to_rgb();
-            let b = img.get_pixel(x, y + 1).to_rgb();
-            let indent_t = (t[0] / 3 + t[1] / 3 + t[2] / 3) / s;
-            let indent_b = (b[0] / 3 + b[1] / 3 + b[2] / 3) / s;
-            let index = std::cmp::min(((indent_t + indent_b) / 2) as usize, len - 1);
-            let block = chars[index];
-            execute!(stdout, Print(block))?;
-        }
-        execute!(stdout, Print("\n"))?;
-    }
-    Ok(())
-}
-
+/// A struct representing a 2D character-based style for rendering images.
+///
+/// - Useful for ASCII art generation, where two pixels (upper and bottom)  
+///   are combined into a single character (since each character is not a square).
 struct Style(Vec<Vec<char>>);
 
 impl<const R: usize, const C: usize> From<[[char; R]; C]> for Style {
@@ -304,33 +312,54 @@ impl<const R: usize> From<[char; R]> for Style {
 }
 
 impl Style {
+    /// Returns a character representing the brightness levels of two pixels.
     fn get_char(&self, (Rgb([tr, tg, tb]), Rgb([br, bg, bb])): (Rgb<u8>, Rgb<u8>)) -> char {
-        let r = self.0[0].len();
-        let c = self.0.len();
-        let ti = ((tr as u16 + tg as u16 + tb as u16) / 3) as u8;
-        let bi = ((br as u16 + bg as u16 + bb as u16) / 3) as u8;
-        let r_index = std::cmp::min((ti as usize * r) / u8::MAX as usize, r - 1);
-        let c_index = std::cmp::min((bi as usize * c) / u8::MAX as usize, c - 1);
-        self.0[c_index][r_index]
+        let rows = self.0.len(); // Number of character rows
+        let cols = self.0[0].len(); // Number of character columns
+
+        // Compute grayscale intensity for both pixels using an average of RGB values
+        let top_intensity = ((tr as u16 + tg as u16 + tb as u16) / 3) as u8;
+        let bottom_intensity = ((br as u16 + bg as u16 + bb as u16) / 3) as u8;
+
+        // Map intensity to row and column indices, ensuring they stay within bounds
+        let row_index = std::cmp::min((top_intensity as usize * cols) / u8::MAX as usize, cols - 1);
+        let col_index = std::cmp::min(
+            (bottom_intensity as usize * rows) / u8::MAX as usize,
+            rows - 1,
+        );
+
+        self.0[col_index][row_index]
     }
+    /// Returns a character representing the average brightness of two pixels.
     fn get_char_single_raw(&self, Rgb([tr, tg, tb]): Rgb<u8>, Rgb([br, bg, bb]): Rgb<u8>) -> char {
-        let r = self.0[0].len();
-        let ti = (tr as u16 + tg as u16 + tb as u16) / 3;
-        let bi = (br as u16 + bg as u16 + bb as u16) / 3;
-        let avg = (ti + bi) / 2;
-        let r_index = std::cmp::min((avg as usize * r) / u8::MAX as usize, r - 1);
-        self.0[0][r_index]
+        let cols = self.0[0].len();
+
+        let top_intensity = (tr as u16 + tg as u16 + tb as u16) / 3;
+        let bottom_intensity = (br as u16 + bg as u16 + bb as u16) / 3;
+
+        let avg_intensity = (top_intensity + bottom_intensity) / 2;
+
+        let col_index = std::cmp::min((avg_intensity as usize * cols) / u8::MAX as usize, cols - 1);
+
+        self.0[0][col_index]
     }
+    /// Renders an image as ASCII-style characters and prints it to the given output.
+    ///
+    /// # Parameters:
+    /// - `stdout`: The output stream to print the characters.
+    /// - `img`: The input image to render.
+    /// - `line`: A function that writes a new line after each row.
+    /// - `print_pixel`: A function that processes and prints each character.
     fn print<
         W: io::Write,
         G: Fn(&mut W) -> io::Result<()>,
         F: Fn(&mut W, (Rgb<u8>, Rgb<u8>), char) -> io::Result<()>,
     >(
         &self,
-        img: DynamicImage,
         stdout: &mut W,
+        img: DynamicImage,
         line: G,
-        f: F,
+        print_pixel: F,
     ) -> io::Result<()> {
         let c = self.0.len();
         if c == 1 {
@@ -339,7 +368,7 @@ impl Style {
                     let t = img.get_pixel(x, y).to_rgb();
                     let b = img.get_pixel(x, y + 1).to_rgb();
                     let ch = self.get_char_single_raw(t, b);
-                    f(stdout, (t, b), ch)?;
+                    print_pixel(stdout, (t, b), ch)?;
                 }
                 line(stdout)?;
             }
@@ -349,7 +378,7 @@ impl Style {
                     let t = img.get_pixel(x, y).to_rgb();
                     let b = img.get_pixel(x, y + 1).to_rgb();
                     let ch = self.get_char((t, b));
-                    f(stdout, (t, b), ch)?;
+                    print_pixel(stdout, (t, b), ch)?;
                 }
                 line(stdout)?;
             }
@@ -365,6 +394,7 @@ fn avg_color(c1: Rgb<u8>, c2: Rgb<u8>) -> Rgb<u8> {
     let b = (c1[2] as u16 + c2[2] as u16) / 2;
     Rgb([r as u8, g as u8, b as u8])
 }
+
 #[cfg(test)]
 mod tests {
     use image::Rgb;
