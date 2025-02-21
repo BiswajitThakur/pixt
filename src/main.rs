@@ -1,6 +1,7 @@
 use clap::Parser;
 
-pub mod cli;
+mod cli;
+pub mod output;
 
 fn main() {
     if let Err(err) = cli::Cli::parse().run() {
