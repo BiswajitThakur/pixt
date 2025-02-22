@@ -31,7 +31,8 @@ Options:
   -w, --width <WIDTH>    Output width in terminal characters
   -H, --height <HEIGHT>  Output height in terminal characters
   -c, --colored          Enable colored output
-  -s, --style <STYLE>    Style of Output Image [default: pixel] [possible values: pixel, ascii, block, braills, dots, custom]
+  -s, --style <STYLE>    Style of Output Image [default: pixel] [possible values: pixel, ascii, block, braills, dots, custom, from-file]
+  -o, --output <OUTPUT>  Optput
   -h, --help             Print help
 ```
 
@@ -64,6 +65,12 @@ pixt -s ascii <path of image>
 ```
 
 ![ascii image](./screenshots/-s_ascii.png)
+
+```bash
+pixt -s from-file <file> <image-path>
+```
+
+![ascii image](./screenshots/-s_from-file.png)
 
 ```bash
 pixt -c -s custom ' `"-~:^>()*?[]{}=$#@' <path of image>

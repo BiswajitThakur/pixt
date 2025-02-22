@@ -6,16 +6,23 @@ use crossterm::{
 };
 use image::Rgb;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+/// Output color type
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub enum ColorType {
+    /// Avg of upper and lower applied as forground (font) color
     AvgFgOnly,
+    /// Avg of upper and lower applied as background color
     AvgBgOnly,
+    /// upper pixel color as forground, lower pixel color as background
     FgTopBgDown,
+    /// upper pixel color as background, lower pixel color as forground
     BgTopFgDown,
+    /// default color
     #[default]
     None,
 }
 
+/// Output type
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OutputType {
     Term(ColorType),
@@ -29,9 +36,10 @@ impl Default for OutputType {
     }
 }
 
-impl From<&Path> for OutputType {
-    fn from(path: &Path) -> Self {
+impl<T: AsRef<Path>> From<T> for OutputType {
+    fn from(path: T) -> Self {
         let ext = path
+            .as_ref()
             .extension()
             .unwrap_or_default()
             .to_str()
@@ -85,6 +93,12 @@ impl OutputType {
             Self::Html(_) => {
                 fn line<W: io::Write>(stdout: &mut W) -> io::Result<()> {
                     stdout.write_all(b"<br />\n")
+                }
+                line
+            }
+            Self::Svg(ColorType::None) => {
+                fn line<W: io::Write>(stdout: &mut W) -> io::Result<()> {
+                    stdout.write_all(b"<tspan x=\"0\" dy=\"17\">/</tspan>\n")
                 }
                 line
             }
@@ -238,6 +252,39 @@ impl OutputType {
                 }
                 print
             }
+            Self::Svg(ColorType::None) => {
+                todo!()
+                /*
+                fn print<W: io::Write>(
+                    stdout: &mut W,
+                    _: (Rgb<u8>, Rgb<u8>),
+                    ch: char,
+                ) -> io::Result<()> {
+                    let font_color = "#FFFFFF";
+                    write!(stdout, "<tspan fill=\"{}\">{}</tspan>", font_color, ch)
+                }
+                print
+                */
+            }
+            Self::Svg(ColorType::AvgFgOnly) => {
+                todo!()
+                /*
+                fn print<W: io::Write>(
+                    stdout: &mut W,
+                    (c1, c2): (Rgb<u8>, Rgb<u8>),
+                    ch: char,
+                ) -> io::Result<()> {
+                    let color = avg_color(c1, c2);
+                    write!(
+                        stdout,
+                        "<tspan fill=\"{}\">{}</tspan>",
+                        rgb_to_css_hex(color),
+                        ch
+                    )
+                }
+                print
+                */
+            }
             _ => todo!(),
         }
     }
@@ -259,7 +306,7 @@ impl OutputType {
                     ColorType::None => 1.2,
                     _ => 0.6,
                 };
-                let data = format!(
+                let buf = format!(
                     "<!DOCTYPE html>
 <html lang=\"en\">
   <head>
@@ -282,22 +329,37 @@ impl OutputType {
   <body>
     <pre>"
                 );
-                file.write_all(data.as_bytes())?;
+                file.write_all(buf.as_bytes())?;
             }
-            Self::Svg(_) => todo!(),
+            Self::Svg(_) => {
+                todo!()
+                /*
+                            let width = width * 9;
+                            let height = height * 15;
+                            let background_color = "#191919";
+                            let buf = format!(
+                                "<svg version=\"1.1\"
+                   width=\"{width}\" height=\"{height}\"
+                   xmlns=\"http://www.w3.org/2000/svg\">
+                <rect width=\"100%\" height=\"100%\" fill=\"{background_color}\" />
+                <text x=\"0\" y=\"1\" font-family=\"monospac\" font-size=\"16\">
+                "
+                            );
+                            file.write_all(buf.as_bytes())?;
+                            */
+            }
             _ => {}
         }
         Ok(())
     }
+
     pub fn write_footer<W: io::Write>(&self, file: &mut W) -> io::Result<()> {
         match self {
-            Self::Html(_) => file.write_all(
-                br#"    </pre>
-  </body>
-</html>
-"#,
-            )?,
-            Self::Svg(_) => todo!(),
+            Self::Html(_) => file.write_all(b"    </pre>\n  </body>\n</html>\n")?,
+            Self::Svg(_) => {
+                todo!()
+                // file.write_all(b"    </text>\n</svg>")?;
+            }
             _ => {}
         }
         Ok(())

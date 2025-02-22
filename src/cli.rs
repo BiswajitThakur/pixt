@@ -2,7 +2,7 @@ use clap::{Parser, ValueEnum};
 
 use std::{
     fs,
-    io::{self, BufWriter},
+    io::{self, BufReader, BufWriter, Read},
     path::PathBuf,
 };
 
@@ -51,12 +51,13 @@ enum StyleOps {
     Braills,
     Dots,
     Custom,
+    FromFile,
 }
 
 impl Cli {
     pub fn run(&self) -> io::Result<()> {
         if let Some(path) = &self.output {
-            let file = fs::File::create_new(path).unwrap_or_else(|err| {
+            let file = fs::File::create(path).unwrap_or_else(|err| {
                 eprintln!("{}", err);
                 std::process::exit(1);
             });
@@ -88,10 +89,11 @@ fn render_app<W: io::Write>(mut stdout: W, app: &Cli) -> io::Result<()> {
     // - Otherwise, if `custom` is selected, skip the first argument (which may be the style
     //   option) and collect the rest as image paths.
     // - If a different style is selected, use all provided arguments as they are.
-    let args = if app.style == StyleOps::Custom && app.files.len() < 2 {
+    let args = if matches!(app.style, StyleOps::Custom | StyleOps::FromFile) && app.files.len() < 2
+    {
         eprintln!("ERROR: Image Path Not Found");
         std::process::exit(1);
-    } else if app.style == StyleOps::Custom {
+    } else if matches!(app.style, StyleOps::Custom | StyleOps::FromFile) {
         app.files.iter().skip(1).cloned().collect()
     } else {
         app.files.clone()
@@ -213,7 +215,7 @@ fn render_app<W: io::Write>(mut stdout: W, app: &Cli) -> io::Result<()> {
                     .into_string()
                     .unwrap_or_else(|err| {
                         eprintln!("ERROR: envalid chars: '{:?}'", err);
-                        std::process::exit(1);
+                        std::process::exit(1)
                     });
                 out = out.set_color(ColorType::None);
                 let style = Style::from((&mut stdout, input.chars().collect::<Vec<char>>()));
@@ -226,10 +228,36 @@ fn render_app<W: io::Write>(mut stdout: W, app: &Cli) -> io::Result<()> {
                     .into_string()
                     .unwrap_or_else(|err| {
                         eprintln!("ERROR: envalid chars: '{:?}'", err);
-                        std::process::exit(1);
+                        std::process::exit(1)
                     });
                 out = out.set_color(ColorType::AvgFgOnly);
                 let style = Style::from((&mut stdout, input.chars().collect::<Vec<char>>()));
+                render_image(style, &out, img)?;
+            }
+            (StyleOps::FromFile, _) => {
+                let path = app.files[0]
+                    .clone()
+                    .into_os_string()
+                    .into_string()
+                    .unwrap_or_else(|err| {
+                        eprintln!("ERROR: envalid chars: '{:?}'", err);
+                        std::process::exit(1);
+                    });
+                let file = fs::File::open(path).unwrap_or_else(|err| {
+                    eprintln!("{}", err);
+                    std::process::exit(1)
+                });
+                let mut reader = BufReader::new(file);
+                let mut val = String::new();
+                reader.read_to_string(&mut val)?;
+                let data = val
+                    .lines()
+                    .map(|v| v.trim().chars().collect())
+                    .filter(|v: &Vec<char>| !v.is_empty())
+                    .collect();
+                let mut style = Style::new(data, &mut stdout);
+                style.set_char_from_color(false);
+                out = out.set_color(ColorType::AvgFgOnly);
                 render_image(style, &out, img)?;
             }
         }
@@ -241,36 +269,85 @@ fn render_app<W: io::Write>(mut stdout: W, app: &Cli) -> io::Result<()> {
 ///
 /// - Useful for ASCII art generation, where two pixels (upper and bottom)  
 ///   are combined into a single character (since each character is not a square).
-struct Style<'a, O: io::Write>(Vec<Vec<char>>, &'a mut O);
+struct Style<'a, O: io::Write> {
+    data: Vec<Vec<char>>,
+    stdout: &'a mut O,
+    get_char_from_color: bool,
+    x: usize,
+    y: usize,
+}
 
 impl<'a, const R: usize, const C: usize, O: io::Write> From<(&'a mut O, [[char; R]; C])>
     for Style<'a, O>
 {
     fn from((stdout, value): (&'a mut O, [[char; R]; C])) -> Self {
-        Self(
-            value.into_iter().map(|v| v.into_iter().collect()).collect(),
+        Self {
+            data: value.into_iter().map(|v| v.into_iter().collect()).collect(),
             stdout,
-        )
+            get_char_from_color: true,
+            x: 0,
+            y: 0,
+        }
     }
 }
 
 impl<'a, O: io::Write> From<(&'a mut O, Vec<char>)> for Style<'a, O> {
     fn from((stdout, value): (&'a mut O, Vec<char>)) -> Self {
-        Self(vec![value], stdout)
+        Self {
+            data: vec![value],
+            stdout,
+            get_char_from_color: true,
+            x: 0,
+            y: 0,
+        }
     }
 }
 
 impl<'a, const R: usize, O: io::Write> From<(&'a mut O, [char; R])> for Style<'a, O> {
     fn from((stdout, value): (&'a mut O, [char; R])) -> Self {
-        Self(vec![value.into_iter().collect()], stdout)
+        Self {
+            data: vec![value.into_iter().collect()],
+            stdout,
+            get_char_from_color: true,
+            x: 0,
+            y: 0,
+        }
     }
 }
 
-impl<O: io::Write> Style<'_, O> {
+impl<'a, O: io::Write> Style<'a, O> {
+    fn new(data: Vec<Vec<char>>, stdout: &'a mut O) -> Self {
+        Self {
+            data,
+            stdout,
+            get_char_from_color: true,
+            x: 0,
+            y: 0,
+        }
+    }
+    fn set_char_from_color(&mut self, flag: bool) {
+        self.get_char_from_color = flag;
+    }
+    fn move_next(&mut self) -> char {
+        if let Some(v) = self.data.get(self.y) {
+            if let Some(u) = v.get(self.x) {
+                self.x += 1;
+                *u
+            } else {
+                self.x = 0;
+                self.y += 1;
+                self.move_next()
+            }
+        } else {
+            self.x = 0;
+            self.y = 0;
+            self.move_next()
+        }
+    }
     /// Returns a character representing the brightness levels of two pixels.
     fn get_char(&self, (Rgb([tr, tg, tb]), Rgb([br, bg, bb])): (Rgb<u8>, Rgb<u8>)) -> char {
-        let rows = self.0.len(); // Number of character rows
-        let cols = self.0[0].len(); // Number of character columns
+        let rows = self.data.len(); // Number of character rows
+        let cols = self.data[0].len(); // Number of character columns
 
         // Compute grayscale intensity for both pixels using an average of RGB values
         let top_intensity = ((tr as u16 + tg as u16 + tb as u16) / 3) as u8;
@@ -283,11 +360,11 @@ impl<O: io::Write> Style<'_, O> {
             rows - 1,
         );
 
-        self.0[col_index][row_index]
+        self.data[col_index][row_index]
     }
     /// Returns a character representing the average brightness of two pixels.
     fn get_char_single_raw(&self, Rgb([tr, tg, tb]): Rgb<u8>, Rgb([br, bg, bb]): Rgb<u8>) -> char {
-        let cols = self.0[0].len();
+        let cols = self.data[0].len();
 
         let top_intensity = (tr as u16 + tg as u16 + tb as u16) / 3;
         let bottom_intensity = (br as u16 + bg as u16 + bb as u16) / 3;
@@ -296,7 +373,7 @@ impl<O: io::Write> Style<'_, O> {
 
         let col_index = std::cmp::min((avg_intensity as usize * cols) / u8::MAX as usize, cols - 1);
 
-        self.0[0][col_index]
+        self.data[0][col_index]
     }
     /// Renders an image as ASCII-style characters and prints it to the given output.
     ///
@@ -314,26 +391,34 @@ impl<O: io::Write> Style<'_, O> {
         line: G,
         print_pixel: F,
     ) -> io::Result<()> {
-        let c = self.0.len();
+        let c = self.data.len();
         if c == 1 {
             for y in (0..img.height() - 1).step_by(2) {
                 for x in 0..img.width() {
                     let t = img.get_pixel(x, y).to_rgb();
                     let b = img.get_pixel(x, y + 1).to_rgb();
-                    let ch = self.get_char_single_raw(t, b);
-                    print_pixel(self.1, (t, b), ch)?;
+                    let ch = if self.get_char_from_color {
+                        self.get_char_single_raw(t, b)
+                    } else {
+                        self.move_next()
+                    };
+                    print_pixel(self.stdout, (t, b), ch)?;
                 }
-                line(self.1)?;
+                line(self.stdout)?;
             }
         } else {
             for y in (0..img.height() - 1).step_by(2) {
                 for x in 0..img.width() {
                     let t = img.get_pixel(x, y).to_rgb();
                     let b = img.get_pixel(x, y + 1).to_rgb();
-                    let ch = self.get_char((t, b));
-                    print_pixel(self.1, (t, b), ch)?;
+                    let ch = if self.get_char_from_color {
+                        self.get_char((t, b))
+                    } else {
+                        self.move_next()
+                    };
+                    print_pixel(self.stdout, (t, b), ch)?;
                 }
-                line(self.1)?;
+                line(self.stdout)?;
             }
         }
         Ok(())
@@ -343,10 +428,10 @@ impl<O: io::Write> Style<'_, O> {
         img: &DynamicImage,
         f: F,
     ) -> io::Result<()> {
-        f(self.1, img.width(), img.height())
+        f(self.stdout, img.width(), img.height())
     }
     fn print_footer<F: Fn(&mut O) -> io::Result<()>>(&mut self, f: F) -> io::Result<()> {
-        f(self.1)
+        f(self.stdout)
     }
 }
 
