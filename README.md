@@ -2,6 +2,12 @@
 
 `pixt` is a command-line tool for rendering images directly in the terminal with various styles, including pixel-based, ASCII, block, and braille.
 
+## TODO
+
+- [x] Terminal output
+- [x] HTML output
+- [ ] SVG output 🚧
+
 ## Installation
 
 ### Using Cargo

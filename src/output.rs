@@ -27,7 +27,7 @@ pub enum ColorType {
 pub enum OutputType {
     Term(ColorType),
     Html(ColorType),
-    Svg(ColorType),
+    Svg(ColorType), // TODO: Implement proper SVG rendering
 }
 
 impl Default for OutputType {
@@ -97,8 +97,9 @@ impl OutputType {
                 line
             }
             Self::Svg(ColorType::None) => {
-                fn line<W: io::Write>(stdout: &mut W) -> io::Result<()> {
-                    stdout.write_all(b"<tspan x=\"0\" dy=\"17\">/</tspan>\n")
+                fn line<W: io::Write>(_stdout: &mut W) -> io::Result<()> {
+                    todo!()
+                    //stdout.write_all(b"<tspan x=\"0\" dy=\"17\">/</tspan>\n")
                 }
                 line
             }

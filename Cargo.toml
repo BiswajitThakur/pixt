@@ -1,7 +1,7 @@
 [package]
 name = "pixt"
-version = "1.1.0"
-edition = "2021"
+version = "1.1.1"
+edition = "2024"
 license = "MIT"
 description = "Terminal Based Cross Platform Image Viewer"
 repository = "https://github.com/BiswajitThakur/pixt"

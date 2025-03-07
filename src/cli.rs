@@ -33,7 +33,7 @@ pub struct Cli {
     )]
     style: StyleOps,
 
-    /// Optput
+    /// Optput path.<txt|html|svg>
     #[arg(short = 'o', long = "output")]
     output: Option<PathBuf>,
 
