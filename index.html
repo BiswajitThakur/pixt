@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image to ASCII Art</title>
+  <style>
+    body {
+      font-family: monospace;
+      background-color: #121212;
+      color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 1rem;
+      margin: 0;
+    }
+
+    h1 {
+      color: #00e676;
+      font-size: 1.8rem;
+    }
+
+    .container {
+      background: #1e1e1e;
+      padding: 1.5rem;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      width: 90%;
+      max-width: 600px;
+    }
+
+    input[type="number"], input[type="file"], button {
+      margin: 0.5rem 0;
+      padding: 0.6rem;
+      border-radius: 5px;
+      border: none;
+      font-size: 1rem;
+    }
+
+    input[type="file"] {
+      background: #2a2a2a;
+      color: #ddd;
+    }
+
+    input[type="number"] {
+      width: 45%;
+      background: #2a2a2a;
+      color: #fff;
+      text-align: center;
+    }
+
+    button {
+      background-color: #00e676;
+      color: #000;
+      cursor: pointer;
+      transition: background 0.2s;
+      width: 100%;
+    }
+
+    button:hover {
+      background-color: #00c853;
+    }
+
+    pre {
+      background: #000;
+      color: #00e676;
+      padding: 1rem;
+      border-radius: 8px;
+      white-space: pre;
+      overflow-x: auto;
+      font-size: 10px;
+      max-height: 70vh;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+    <script>
+      let image_data = null;
+      let img_width = 0;
+      let img_height = 0;
+    </script>
+  <div class="container">
+    <h1>Image → ASCII Art</h1>
+
+    <input type="file" id="imageInput" accept="image/*">
+    <div>
+      <input type="number" id="widthInput" placeholder="Width" min="1" value="">
+      <input type="number" id="heightInput" placeholder="Height" min="1" value="">
+        <label>
+  <input type="checkbox" id="keepRatio" checked />
+  Keep Aspect Ratio
+</label>
+    </div>
+
+    <button id="convertBtn">Convert to ASCII</button>
+
+    <pre id="output">ASCII output will appear here...</pre>
+  </div>
+    <script type="module">
+      import init, { start } from "./pkg/pixt.js";
+
+      init().then(() => {
+        start();
+      });
+    </script>
+</body>
+</html>
+

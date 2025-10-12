@@ -1,4 +1,8 @@
 use clap::{Parser, ValueEnum};
+use pixt::{
+    img::{ColorType, OutputType, PixtImg},
+    style::ImgStyle,
+};
 
 use std::{
     fs,
@@ -6,9 +10,7 @@ use std::{
     path::PathBuf,
 };
 
-use image::{imageops::FilterType, DynamicImage, GenericImageView, ImageReader, Pixel, Rgb};
-
-use crate::output::{ColorType, OutputType};
+use image::{ImageReader, imageops::FilterType};
 
 #[derive(Debug, Clone, Parser)]
 pub struct Cli {
@@ -70,19 +72,6 @@ impl Cli {
     }
 }
 
-fn render_image<W: io::Write>(
-    mut style: Style<W>,
-    out: &OutputType,
-    img: DynamicImage,
-) -> io::Result<()> {
-    style.print_header(&img, |stdout, width, height| {
-        out.write_header(stdout, width, height)
-    })?;
-    style.print(img, out.print_line(), out.print_pixel())?;
-    style.print_footer(|stdout| out.write_footer(stdout))?;
-    Ok(())
-}
-
 fn render_app<W: io::Write>(mut stdout: W, app: &Cli) -> io::Result<()> {
     // Extract image paths if the `--style | -s custom` option is provided in the CLI.
     // - If the `custom` style is selected but no image path is provided, print an error and exit.
@@ -98,25 +87,12 @@ fn render_app<W: io::Write>(mut stdout: W, app: &Cli) -> io::Result<()> {
     } else {
         app.files.clone()
     };
-    let mut out = OutputType::from(app.output.clone().unwrap_or_default().as_path());
-    //let out = OutputType::Html;
-
-    // Iterate over the provided image paths and process each image.
-    // - Open the image file using `ImageReader`.
-    // - Decode the image; if decoding fails, print the error and exit.
-    for path in args {
+    for ref path in args {
         let img = ImageReader::open(path)?.decode().unwrap_or_else(|err| {
             eprintln!("{}", err);
             std::process::exit(1);
         });
         let filter = FilterType::CatmullRom;
-        // Resize the image based on the provided width and height options:
-        // - If both width and height are specified, resize the image exactly to those dimensions.
-        // - If only width is specified, calculate the height to maintain the aspect ratio.
-        // - If only height is specified, calculate the width to maintain the aspect ratio,
-        //   ensuring it does not exceed the terminal width.
-        // - If neither width nor height is specified, scale the image to fit within the terminal width
-        //   while maintaining the aspect ratio.
         let img = match (app.width, app.height) {
             (Some(width), Some(height)) => img.resize_exact(width, height, filter),
             (Some(width), None) => img.resize(width, (width * img.height()) / img.width(), filter),
@@ -134,79 +110,51 @@ fn render_app<W: io::Write>(mut stdout: W, app: &Cli) -> io::Result<()> {
                 img.resize(w as u32, h, filter)
             }
         };
-        // Handle image rendering based on style and color mode.
-        // - `StyleOps` determines the image rendering style (e.g., ASCII, block, etc.).
-        // - `bool` (`self.colored`) specifies whether to render in color or grayscale.
+        let output_type = match path.extension() {
+            Some(v) if v == "html" => OutputType::html(),
+            Some(v) if v == "svg" => OutputType::svg(),
+            _ => OutputType::term(),
+        };
         match (&app.style, &app.colored) {
             (StyleOps::Ascii, true) => {
-                out = out.set_color(ColorType::AvgFgOnly);
-                let style =
-                    Style::from((&mut stdout, [' ', '.', '-', '~', '+', '*', '%', '#', '@']));
-                render_image(style, &out, img)?;
+                let pi = PixtImg::new(ImgStyle::Ascii, output_type.color(ColorType::AvgFgOnly));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Ascii, false) => {
-                out = out.set_color(ColorType::None);
-                let style =
-                    Style::from((&mut stdout, [' ', '.', '-', '~', '+', '*', '%', '#', '@']));
-                render_image(style, &out, img)?;
+                let pi = PixtImg::new(ImgStyle::Ascii, output_type.color(ColorType::None));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Block, true) => {
-                out = out.set_color(ColorType::AvgFgOnly);
-                let style = Style::from((&mut stdout, [' ', '░', '▒', '▓']));
-                render_image(style, &out, img)?;
+                let pi = PixtImg::new(ImgStyle::Block, output_type.color(ColorType::AvgFgOnly));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Block, false) => {
-                out = out.set_color(ColorType::None);
-                let style = Style::from((&mut stdout, [' ', '░', '▒', '▓']));
-                render_image(style, &out, img)?;
+                let pi = PixtImg::new(ImgStyle::Block, output_type.color(ColorType::None));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Pixel, true) => {
-                out = out.set_color(ColorType::FgTopBgDown);
-                let style = Style::from((&mut stdout, ['▀']));
-                render_image(style, &out, img)?;
+                let pi = PixtImg::new(ImgStyle::Pixel, output_type.color(ColorType::FgTopBgDown));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Pixel, false) => {
-                out = out.set_color(ColorType::None);
-                let style = Style::from((&mut stdout, [' ', '▀', '▞', '▟', '█']));
-                render_image(style, &out, img)?;
+                let pi = PixtImg::new(ImgStyle::Pixel, output_type.color(ColorType::None));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Braills, true) => {
-                out = out.set_color(ColorType::AvgFgOnly);
-                let style = Style::from((
-                    &mut stdout,
-                    [
-                        [' ', '⠁', '⠉', '⠓', '⠛'],
-                        ['⠄', '⠅', '⠩', '⠝', '⠟'],
-                        ['⠤', '⠥', '⠭', '⠯', '⠽'],
-                        ['⠴', '⠵', '⠽', '⠾', '⠿'],
-                        ['⠶', '⠾', '⠾', '⠿', '⠿'],
-                    ],
-                ));
-                render_image(style, &out, img)?;
+                let pi = PixtImg::new(ImgStyle::Braills, output_type.color(ColorType::AvgFgOnly));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Braills, false) => {
-                out = out.set_color(ColorType::None);
-                let style = Style::from((
-                    &mut stdout,
-                    [
-                        [' ', '⠁', '⠉', '⠓', '⠛'],
-                        ['⠄', '⠅', '⠩', '⠝', '⠟'],
-                        ['⠤', '⠥', '⠭', '⠯', '⠽'],
-                        ['⠴', '⠵', '⠽', '⠾', '⠿'],
-                        ['⠶', '⠾', '⠾', '⠿', '⠿'],
-                    ],
-                ));
-                render_image(style, &out, img)?;
+                let pi = PixtImg::new(ImgStyle::Braills, output_type.color(ColorType::None));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Dots, true) => {
-                out = out.set_color(ColorType::AvgFgOnly);
-                let style = Style::from((&mut stdout, [' ', '⠂', '⠒', '⠕', '⠞', '⠟', '⠿']));
-                render_image(style, &out, img)?;
+                let pi = PixtImg::new(ImgStyle::Dots, output_type.color(ColorType::AvgFgOnly));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Dots, false) => {
-                out = out.set_color(ColorType::None);
-                let style = Style::from((&mut stdout, [' ', '⠂', '⠒', '⠕', '⠞', '⠟', '⠿']));
-                render_image(style, &out, img)?;
+                let pi = PixtImg::new(ImgStyle::Dots, output_type.color(ColorType::None));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Custom, false) => {
                 let input = app.files[0]
@@ -216,10 +164,11 @@ fn render_app<W: io::Write>(mut stdout: W, app: &Cli) -> io::Result<()> {
                     .unwrap_or_else(|err| {
                         eprintln!("ERROR: envalid chars: '{:?}'", err);
                         std::process::exit(1)
-                    });
-                out = out.set_color(ColorType::None);
-                let style = Style::from((&mut stdout, input.chars().collect::<Vec<char>>()));
-                render_image(style, &out, img)?;
+                    })
+                    .chars()
+                    .collect::<Vec<char>>();
+                let pi = PixtImg::new(input, output_type.color(ColorType::None));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::Custom, true) => {
                 let input = app.files[0]
@@ -229,10 +178,11 @@ fn render_app<W: io::Write>(mut stdout: W, app: &Cli) -> io::Result<()> {
                     .unwrap_or_else(|err| {
                         eprintln!("ERROR: envalid chars: '{:?}'", err);
                         std::process::exit(1)
-                    });
-                out = out.set_color(ColorType::AvgFgOnly);
-                let style = Style::from((&mut stdout, input.chars().collect::<Vec<char>>()));
-                render_image(style, &out, img)?;
+                    })
+                    .chars()
+                    .collect::<Vec<char>>();
+                let pi = PixtImg::new(input, output_type.color(ColorType::AvgFgOnly));
+                pi.print(&img, &mut stdout)?;
             }
             (StyleOps::FromFile, _) => {
                 let path = app.files[0]
@@ -254,235 +204,12 @@ fn render_app<W: io::Write>(mut stdout: W, app: &Cli) -> io::Result<()> {
                     .lines()
                     .map(|v| v.trim().chars().collect())
                     .filter(|v: &Vec<char>| !v.is_empty())
-                    .collect();
-                let mut style = Style::new(data, &mut stdout);
-                style.set_char_from_color(false);
-                out = out.set_color(ColorType::AvgFgOnly);
-                render_image(style, &out, img)?;
+                    .collect::<Vec<Vec<char>>>();
+
+                let pi = PixtImg::new(data, output_type.color(ColorType::AvgFgOnly));
+                pi.print(&img, &mut stdout)?;
             }
         }
     }
     Ok(())
-}
-
-/// A struct representing a 2D character-based style for rendering images.
-///
-/// - Useful for ASCII art generation, where two pixels (upper and bottom)  
-///   are combined into a single character (since each character is not a square).
-struct Style<'a, O: io::Write> {
-    data: Vec<Vec<char>>,
-    stdout: &'a mut O,
-    get_char_from_color: bool,
-    x: usize,
-    y: usize,
-}
-
-impl<'a, const R: usize, const C: usize, O: io::Write> From<(&'a mut O, [[char; R]; C])>
-    for Style<'a, O>
-{
-    fn from((stdout, value): (&'a mut O, [[char; R]; C])) -> Self {
-        Self {
-            data: value.into_iter().map(|v| v.into_iter().collect()).collect(),
-            stdout,
-            get_char_from_color: true,
-            x: 0,
-            y: 0,
-        }
-    }
-}
-
-impl<'a, O: io::Write> From<(&'a mut O, Vec<char>)> for Style<'a, O> {
-    fn from((stdout, value): (&'a mut O, Vec<char>)) -> Self {
-        Self {
-            data: vec![value],
-            stdout,
-            get_char_from_color: true,
-            x: 0,
-            y: 0,
-        }
-    }
-}
-
-impl<'a, const R: usize, O: io::Write> From<(&'a mut O, [char; R])> for Style<'a, O> {
-    fn from((stdout, value): (&'a mut O, [char; R])) -> Self {
-        Self {
-            data: vec![value.into_iter().collect()],
-            stdout,
-            get_char_from_color: true,
-            x: 0,
-            y: 0,
-        }
-    }
-}
-
-impl<'a, O: io::Write> Style<'a, O> {
-    fn new(data: Vec<Vec<char>>, stdout: &'a mut O) -> Self {
-        Self {
-            data,
-            stdout,
-            get_char_from_color: true,
-            x: 0,
-            y: 0,
-        }
-    }
-    fn set_char_from_color(&mut self, flag: bool) {
-        self.get_char_from_color = flag;
-    }
-    fn move_next(&mut self) -> char {
-        if let Some(v) = self.data.get(self.y) {
-            if let Some(u) = v.get(self.x) {
-                self.x += 1;
-                *u
-            } else {
-                self.x = 0;
-                self.y += 1;
-                self.move_next()
-            }
-        } else {
-            self.x = 0;
-            self.y = 0;
-            self.move_next()
-        }
-    }
-    /// Returns a character representing the brightness levels of two pixels.
-    fn get_char(&self, (Rgb([tr, tg, tb]), Rgb([br, bg, bb])): (Rgb<u8>, Rgb<u8>)) -> char {
-        let rows = self.data.len(); // Number of character rows
-        let cols = self.data[0].len(); // Number of character columns
-
-        // Compute grayscale intensity for both pixels using an average of RGB values
-        let top_intensity = ((tr as u16 + tg as u16 + tb as u16) / 3) as u8;
-        let bottom_intensity = ((br as u16 + bg as u16 + bb as u16) / 3) as u8;
-
-        // Map intensity to row and column indices, ensuring they stay within bounds
-        let row_index = std::cmp::min((top_intensity as usize * cols) / u8::MAX as usize, cols - 1);
-        let col_index = std::cmp::min(
-            (bottom_intensity as usize * rows) / u8::MAX as usize,
-            rows - 1,
-        );
-
-        self.data[col_index][row_index]
-    }
-    /// Returns a character representing the average brightness of two pixels.
-    fn get_char_single_raw(&self, Rgb([tr, tg, tb]): Rgb<u8>, Rgb([br, bg, bb]): Rgb<u8>) -> char {
-        let cols = self.data[0].len();
-
-        let top_intensity = (tr as u16 + tg as u16 + tb as u16) / 3;
-        let bottom_intensity = (br as u16 + bg as u16 + bb as u16) / 3;
-
-        let avg_intensity = (top_intensity + bottom_intensity) / 2;
-
-        let col_index = std::cmp::min((avg_intensity as usize * cols) / u8::MAX as usize, cols - 1);
-
-        self.data[0][col_index]
-    }
-    /// Renders an image as ASCII-style characters and prints it to the given output.
-    ///
-    /// # Parameters:
-    /// - `stdout`: The output stream to print the characters.
-    /// - `img`: The input image to render.
-    /// - `line`: A function that writes a new line after each row.
-    /// - `print_pixel`: A function that processes and prints each character.
-    fn print<
-        G: Fn(&mut O) -> io::Result<()>,
-        F: Fn(&mut O, (Rgb<u8>, Rgb<u8>), char) -> io::Result<()>,
-    >(
-        &mut self,
-        img: DynamicImage,
-        line: G,
-        print_pixel: F,
-    ) -> io::Result<()> {
-        let c = self.data.len();
-        if c == 1 {
-            for y in (0..img.height() - 1).step_by(2) {
-                for x in 0..img.width() {
-                    let t = img.get_pixel(x, y).to_rgb();
-                    let b = img.get_pixel(x, y + 1).to_rgb();
-                    let ch = if self.get_char_from_color {
-                        self.get_char_single_raw(t, b)
-                    } else {
-                        self.move_next()
-                    };
-                    print_pixel(self.stdout, (t, b), ch)?;
-                }
-                line(self.stdout)?;
-            }
-        } else {
-            for y in (0..img.height() - 1).step_by(2) {
-                for x in 0..img.width() {
-                    let t = img.get_pixel(x, y).to_rgb();
-                    let b = img.get_pixel(x, y + 1).to_rgb();
-                    let ch = if self.get_char_from_color {
-                        self.get_char((t, b))
-                    } else {
-                        self.move_next()
-                    };
-                    print_pixel(self.stdout, (t, b), ch)?;
-                }
-                line(self.stdout)?;
-            }
-        }
-        Ok(())
-    }
-    fn print_header<F: Fn(&mut O, u32, u32) -> io::Result<()>>(
-        &mut self,
-        img: &DynamicImage,
-        f: F,
-    ) -> io::Result<()> {
-        f(self.stdout, img.width(), img.height())
-    }
-    fn print_footer<F: Fn(&mut O) -> io::Result<()>>(&mut self, f: F) -> io::Result<()> {
-        f(self.stdout)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io;
-
-    use image::Rgb;
-
-    use super::Style;
-
-    #[test]
-    fn test_style_get_char() {
-        let mut stdout = io::sink();
-        let st = Style::from((
-            &mut stdout,
-            [
-                [' ', '⠁', '⠉', '⠓', '⠛'],
-                ['⠄', '⠅', '⠩', '⠝', '⠟'],
-                ['⠤', '⠥', '⠭', '⠯', '⠿'],
-                ['⠴', '⠵', '⠽', '⠿', '⠿'],
-                ['⠶', '⠾', '⠿', '⠿', '⠿'],
-            ],
-        ));
-        assert_eq!(st.get_char((Rgb([0, 0, 0]), Rgb([0, 0, 0]))), ' ');
-        assert_eq!(st.get_char((Rgb([0xFF, 0xFF, 0xFF]), Rgb([0, 0, 0]))), '⠛');
-        assert_eq!(st.get_char((Rgb([0xFE, 0xFE, 0xFE]), Rgb([0, 0, 0]))), '⠛');
-        assert_eq!(
-            st.get_char((Rgb([0xFF / 2, 0xFF / 2, 0xFF / 2]), Rgb([0, 0, 0]))),
-            '⠉'
-        );
-        assert_eq!(st.get_char((Rgb([0, 0, 0]), Rgb([0xFF, 0xFF, 0xFF]))), '⠶');
-        assert_eq!(st.get_char((Rgb([0, 0, 0]), Rgb([0xFE, 0xFE, 0xFE]))), '⠶');
-        assert_eq!(
-            st.get_char((Rgb([0, 0, 0]), Rgb([0xFF / 2, 0xFF / 2, 0xFF / 2]))),
-            '⠤'
-        );
-        assert_eq!(
-            st.get_char((Rgb([0xFF, 0xFF, 0xFF]), Rgb([0xFF, 0xFF, 0xFF]))),
-            '⠿'
-        );
-        assert_eq!(
-            st.get_char((Rgb([0xFE, 0xFE, 0xFE]), Rgb([0xFE, 0xFE, 0xFE]))),
-            '⠿'
-        );
-        assert_eq!(
-            st.get_char((
-                Rgb([0xFF / 2, 0xFF / 2, 0xFF / 2]),
-                Rgb([0xFF / 2, 0xFF / 2, 0xFF / 2])
-            )),
-            '⠭'
-        );
-    }
 }
