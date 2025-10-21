@@ -2,42 +2,46 @@ pub mod img;
 pub mod render;
 pub mod style;
 
-use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use web_sys::{
-    Document, Event, FileReader, HtmlElement, HtmlInputElement, HtmlSelectElement, Window,
+    Document, Event, FileReader, HtmlElement, HtmlInputElement, HtmlSelectElement,
     js_sys::{self},
+    wasm_bindgen,
+    wasm_bindgen::prelude::*,
 };
 
+#[cfg(target_arch = "wasm32")]
 use crate::{
-    img::{IntoPixtData, OutputType, PixtImg},
+    img::{OutputType, PixtImg},
     render::render,
     style::ImgStyle,
 };
+
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn start() {
     MyPage::new().unwrap().handle_input();
 }
 
+#[cfg(target_arch = "wasm32")]
 #[derive(Clone)]
 struct MyPage {
-    window: Window,
     document: Document,
 }
 
+#[cfg(target_arch = "wasm32")]
 impl MyPage {
     fn new() -> Option<Self> {
         let window = web_sys::window()?;
         let document = window.document()?;
-        Some(Self { window, document })
+        Some(Self { document })
     }
     fn handle_input(&self) {
         self.init();
         self.handle_convert_btn();
         self.handle_image_input();
     }
-    fn alert(&self, msg: &str) {
-        self.window.alert_with_message(msg).unwrap();
-    }
+
     fn init(&self) {
         let global = web_sys::js_sys::global();
         js_sys::Reflect::set(
@@ -143,47 +147,43 @@ impl MyPage {
             let img_width = img_width.clone();
             let img_height = img_height.clone();
 
-            if let Some(files) = image_input_clone.files() {
-                if let Some(file) = files.get(0) {
-                    let reader = FileReader::new().unwrap();
-                    let reader_clone = reader.clone();
+            if let Some(files) = image_input_clone.files()
+                && let Some(file) = files.get(0)
+            {
+                let reader = FileReader::new().unwrap();
+                let reader_clone = reader.clone();
 
-                    let onload = Closure::<dyn FnMut(_)>::new(move |_: Event| {
-                        let global = js_sys::global();
-                        js_sys::Reflect::set(
-                            &global,
-                            &JsValue::from_str("image_data"),
-                            &JsValue::null(),
-                        )
+                let onload = Closure::<dyn FnMut(_)>::new(move |_: Event| {
+                    let global = js_sys::global();
+                    js_sys::Reflect::set(
+                        &global,
+                        &JsValue::from_str("image_data"),
+                        &JsValue::null(),
+                    )
+                    .unwrap();
+                    let result = reader_clone.result().unwrap();
+                    let array_buffer = js_sys::Uint8Array::new(&result);
+                    let img = image::load_from_memory(&array_buffer.to_vec()).unwrap();
+                    js_sys::Reflect::set(&global, &JsValue::from_str("image_data"), &array_buffer)
                         .unwrap();
-                        let result = reader_clone.result().unwrap();
-                        let array_buffer = js_sys::Uint8Array::new(&result);
-                        let img = image::load_from_memory(&array_buffer.to_vec()).unwrap();
-                        js_sys::Reflect::set(
-                            &global,
-                            &JsValue::from_str("image_data"),
-                            &array_buffer,
-                        )
-                        .unwrap();
-                        js_sys::Reflect::set(
-                            &global,
-                            &JsValue::from_str("img_width"),
-                            &JsValue::from_f64(img.width() as f64),
-                        )
-                        .unwrap();
-                        js_sys::Reflect::set(
-                            &global,
-                            &JsValue::from_str("img_height"),
-                            &JsValue::from_f64(img.height() as f64),
-                        )
-                        .unwrap();
-                        img_width.set_value(img.width().to_string().as_str());
-                        img_height.set_value(img.height().to_string().as_str());
-                    });
-                    reader.set_onload(Some(onload.as_ref().unchecked_ref()));
-                    reader.read_as_array_buffer(&file).unwrap();
-                    onload.forget();
-                }
+                    js_sys::Reflect::set(
+                        &global,
+                        &JsValue::from_str("img_width"),
+                        &JsValue::from_f64(img.width() as f64),
+                    )
+                    .unwrap();
+                    js_sys::Reflect::set(
+                        &global,
+                        &JsValue::from_str("img_height"),
+                        &JsValue::from_f64(img.height() as f64),
+                    )
+                    .unwrap();
+                    img_width.set_value(img.width().to_string().as_str());
+                    img_height.set_value(img.height().to_string().as_str());
+                });
+                reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+                reader.read_as_array_buffer(&file).unwrap();
+                onload.forget();
             }
         });
         image_input
@@ -193,6 +193,7 @@ impl MyPage {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 fn get_img_width(document: &Document) -> u32 {
     let img_width = document
         .get_element_by_id("widthInput")
@@ -202,6 +203,7 @@ fn get_img_width(document: &Document) -> u32 {
     img_width.value().parse().unwrap_or_default()
 }
 
+#[cfg(target_arch = "wasm32")]
 fn get_img_height(document: &Document) -> u32 {
     let img_width = document
         .get_element_by_id("heightInput")

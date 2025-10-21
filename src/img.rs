@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::{io, path::Path};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -5,8 +7,8 @@ use crossterm::{
     execute,
     style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
 };
+
 use image::{DynamicImage, GenericImageView, Pixel as _, Rgb};
-use wasm_bindgen::JsValue;
 
 pub struct PixtImg {
     data: PixtData,
