@@ -1,6 +1,6 @@
-# pixt - Terminal Image Renderer
+# pixt - Image to ASCII Art
 
-`pixt` is a command-line tool for rendering images directly in the terminal with various styles, including pixel-based, ASCII, block, and braille.
+`pixt` is a command-line and web based tool for converting image to ASCII art with various styles, including pixel-based, ASCII, block, and braille.
 
 ## TODO
 
