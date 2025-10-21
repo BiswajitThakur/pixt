@@ -246,6 +246,7 @@ pub enum ColorType {
 /// Output type
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OutputType {
+    Text(ColorType),
     Term(ColorType),
     Html(ColorType),
     Svg(ColorType), // TODO: Implement proper SVG rendering
@@ -275,6 +276,9 @@ impl<T: AsRef<Path>> From<T> for OutputType {
 }
 
 impl OutputType {
+    pub const fn text() -> Self {
+        Self::Text(ColorType::None)
+    }
     pub fn term() -> Self {
         Self::Term(ColorType::default())
     }
@@ -286,6 +290,7 @@ impl OutputType {
     }
     pub fn color(mut self, color: ColorType) -> Self {
         self = match self {
+            Self::Text(_) => Self::Text(color),
             Self::Term(_) => Self::Term(color),
             Self::Html(_) => Self::Html(color),
             Self::Svg(_) => Self::Svg(color),
@@ -298,7 +303,7 @@ impl OutputType {
         W: io::Write,
     {
         match self {
-            Self::Term(ColorType::None) => |mut w: W| w.write_all(b"\n"),
+            Self::Text(_) | Self::Term(ColorType::None) => |mut w: W| w.write_all(b"\n"),
             Self::Term(_) => |mut stdout: W| {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
@@ -318,7 +323,7 @@ impl OutputType {
     #[allow(clippy::type_complexity)]
     pub fn print_pixel<W: io::Write>(&self) -> impl Fn(W, (char, Pixel, Pixel)) -> io::Result<()> {
         match self {
-            Self::Term(ColorType::None) => |mut out: W, (v, _, _)| {
+            Self::Text(_) | Self::Term(ColorType::None) => |mut out: W, (v, _, _)| {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     execute!(out, Print(v))
