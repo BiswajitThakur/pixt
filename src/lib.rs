@@ -142,11 +142,12 @@ impl MyPage {
             .unwrap()
             .dyn_into::<HtmlInputElement>()
             .unwrap();
+        let img_resolution = self.document.get_element_by_id("img_resolution").unwrap();
         let image_input_clone = image_input.clone();
         let on_change = Closure::<dyn FnMut(_)>::new(move |_event: Event| {
             let img_width = img_width.clone();
             let img_height = img_height.clone();
-
+            let img_resolution = img_resolution.clone();
             if let Some(files) = image_input_clone.files()
                 && let Some(file) = files.get(0)
             {
@@ -164,6 +165,7 @@ impl MyPage {
                     let result = reader_clone.result().unwrap();
                     let array_buffer = js_sys::Uint8Array::new(&result);
                     let img = image::load_from_memory(&array_buffer.to_vec()).unwrap();
+                    let default_input_width = std::cmp::min(img.width(), 150);
                     js_sys::Reflect::set(&global, &JsValue::from_str("image_data"), &array_buffer)
                         .unwrap();
                     js_sys::Reflect::set(
@@ -178,8 +180,15 @@ impl MyPage {
                         &JsValue::from_f64(img.height() as f64),
                     )
                     .unwrap();
-                    img_width.set_value(img.width().to_string().as_str());
-                    img_height.set_value(img.height().to_string().as_str());
+                    img_resolution.set_inner_html(
+                        format!("Image Resolution: {} x {}", img.width(), img.height()).as_str(),
+                    );
+                    img_width.set_value(default_input_width.to_string().as_str());
+                    img_height.set_value(
+                        ((default_input_width * img.height()) / img.width())
+                            .to_string()
+                            .as_str(),
+                    );
                 });
                 reader.set_onload(Some(onload.as_ref().unchecked_ref()));
                 reader.read_as_array_buffer(&file).unwrap();
