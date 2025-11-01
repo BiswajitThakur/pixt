@@ -32,6 +32,8 @@ jobs:
       - name: Build project
         run: |
           wasm-pack build --target web --release
+          ls
+          ls pkg/
 
       - name: Prepare deploy directory
         run: |
