@@ -53,7 +53,7 @@ jobs:
           fi
 
           # Clean old files
-          rm -rf ./*
+          rm -rf .
 
           # Copy new files back
           cp -r /tmp/deploy/* ./
