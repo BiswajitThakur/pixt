@@ -36,9 +36,7 @@ jobs:
       - name: Prepare deploy directory
         run: |
           mkdir deploy
-          cp -r index.html style.css pkg deploy/
-          # Copy any other static files (like images, JS)
-          [ -d "static" ] && cp -r static deploy/
+          cp -r index.html pkg deploy/
 
       - name: Deploy to gh-pages branch
         run: |
