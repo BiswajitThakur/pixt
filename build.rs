@@ -3,9 +3,9 @@
 use std::{env, fs, path::Path};
 
 fn main() {
-    // Run only for wasm32 builds
-    #[cfg(not(target_arch = "wasm32"))]
-    {
+    // Detect target triple dynamically
+    let target = env::var("TARGET").unwrap();
+    if !target.contains("wasm32") {
         return;
     }
 
