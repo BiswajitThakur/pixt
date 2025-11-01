@@ -3,7 +3,7 @@ name = "pixt"
 version = "1.2.0"
 edition = "2024"
 license = "MIT"
-description = "Terminal Based Cross Platform Image Viewer"
+description = "Terminal And Web Based Cross Platform Image To ASCII Art"
 repository = "https://github.com/BiswajitThakur/pixt"
 exclude = [
     "screenshots/*",
