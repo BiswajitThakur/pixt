@@ -13,7 +13,7 @@ fn main() {
     let version = env::var("CARGO_PKG_VERSION").unwrap();
 
     // Paths
-    let src_path = Path::new("index.html");
+    let src_path = Path::new("web/index.html");
     let dst_path = Path::new("pkg/index.html");
 
     // Read HTML
