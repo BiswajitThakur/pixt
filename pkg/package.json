@@ -1,0 +1,21 @@
+{
+  "name": "pixt",
+  "type": "module",
+  "description": "Terminal And Web Based Cross Platform Image To ASCII Art",
+  "version": "1.2.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BiswajitThakur/pixt"
+  },
+  "files": [
+    "pixt_bg.wasm",
+    "pixt.js",
+    "pixt.d.ts"
+  ],
+  "main": "pixt.js",
+  "types": "pixt.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

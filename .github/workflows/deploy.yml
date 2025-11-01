@@ -1,0 +1,69 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # get full history for branch switching
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Install wasm-pack
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build project
+        run: |
+          wasm-pack build --target web --release
+          ls
+          ls pkg/
+
+      - name: Prepare deploy directory
+        run: |
+          mkdir deploy
+          cp -r index.html pkg deploy/
+
+      - name: Deploy to gh-pages branch
+        run: |
+          # Store deploy files before switching
+          mkdir -p /tmp/deploy
+          cp -r deploy/* /tmp/deploy/
+
+          # Fetch gh-pages and switch to it (or create if missing)
+          git fetch origin gh-pages || true
+          if git show-ref --verify --quiet refs/heads/gh-pages; then
+            git switch gh-pages
+          else
+            git checkout --orphan gh-pages
+          fi
+
+          # Clean old files
+          rm -rf ./*
+
+          # Copy new files back
+          cp -r /tmp/deploy/* ./
+
+          # Commit and push
+          git add index.html
+          git add -f pkg
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update site from main" || echo "No changes to commit"
+          git push origin gh-pages --force
