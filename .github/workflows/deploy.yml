@@ -40,15 +40,23 @@ jobs:
 
       - name: Deploy to gh-pages branch
         run: |
-          # Create temporary clone of gh-pages
-          git fetch origin gh-pages || true
-          git switch gh-pages || git checkout --orphan gh-pages
+          # Store deploy files before switching
+          mkdir -p /tmp/deploy
+          cp -r deploy/* /tmp/deploy/
 
-          # Remove old files
+          # Fetch gh-pages and switch to it (or create if missing)
+          git fetch origin gh-pages || true
+          if git show-ref --verify --quiet refs/heads/gh-pages; then
+            git switch gh-pages
+          else
+            git checkout --orphan gh-pages
+          fi
+
+          # Clean old files
           rm -rf ./*
 
-          # Copy new site files
-          cp -r ../deploy/* ./
+          # Copy new files back
+          cp -r /tmp/deploy/* ./
 
           # Commit and push
           git add .
