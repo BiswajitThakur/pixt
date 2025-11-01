@@ -92,7 +92,7 @@ impl MyPage {
                 .resize(
                     get_img_width(&document),
                     get_img_height(&document),
-                    image::imageops::FilterType::Nearest,
+                    image::imageops::FilterType::CatmullRom,
                 );
             let mut out = Vec::new();
             let pix_img: PixtImg = match select.value().as_str() {

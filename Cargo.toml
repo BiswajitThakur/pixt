@@ -1,6 +1,6 @@
 [package]
 name = "pixt"
-version = "1.1.1"
+version = "1.2.0"
 edition = "2024"
 license = "MIT"
 description = "Terminal Based Cross Platform Image Viewer"
@@ -14,11 +14,11 @@ exclude = [
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-image = "0.25.5"
+image = "0.25.8"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-clap = { version = "4.5.30", features = ["derive"] }
-crossterm = "0.28.1"
+clap = { version = "4.5.51", features = ["derive"] }
+crossterm = "0.29.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = [
