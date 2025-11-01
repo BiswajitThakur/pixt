@@ -59,7 +59,8 @@ jobs:
           cp -r /tmp/deploy/* ./
 
           # Commit and push
-          git add .
+          git add index.html
+          git add -f pkg
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git commit -m "Update site from main" || echo "No changes to commit"
